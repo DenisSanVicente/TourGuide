@@ -1,5 +1,6 @@
 package com.openclassrooms.tourguide.service;
 
+import com.openclassrooms.tourguide.dto.NearByAttractionDto;
 import com.openclassrooms.tourguide.helper.InternalTestHelper;
 import com.openclassrooms.tourguide.tracker.Tracker;
 import com.openclassrooms.tourguide.user.User;
@@ -95,16 +96,38 @@ public class TourGuideService {
 		return visitedLocation;
 	}
 
-	public List<Attraction> getNearByAttractions(VisitedLocation visitedLocation) {
-		List<Attraction> nearbyAttractions = new ArrayList<>();
-		for (Attraction attraction : gpsUtil.getAttractions()) {
-			if (rewardsService.isWithinAttractionProximity(attraction, visitedLocation.location)) {
-				nearbyAttractions.add(attraction);
-			}
-		}
 
-		return nearbyAttractions;
-	}
+    public List<NearByAttractionDto> getNearByAttractions(
+            User user, VisitedLocation visitedLocation) {
+        return gpsUtil.getAttractions()
+                .stream()
+                .sorted((attraction1, attraction2) ->
+                        Double.compare(
+                                rewardsService.getDistance(
+                                        attraction1, visitedLocation.location
+                                ),
+                                rewardsService.getDistance(
+                                        attraction2, visitedLocation.location
+                                )
+
+                        )
+                )
+                .limit(5)
+                .map(attraction -> new NearByAttractionDto(
+                        attraction.attractionName,
+                        attraction.latitude,
+                        attraction.longitude,
+                        visitedLocation.location.latitude,
+                        visitedLocation.location.longitude,
+                        rewardsService.getDistance(
+                                attraction, visitedLocation.location
+                        ),
+                        rewardsService.getRewardPoints(
+                                attraction, user
+                        )
+                ))
+                .toList();
+    }
 
 	private void addShutDownHook() {
 		Runtime.getRuntime().addShutdownHook(new Thread() {
