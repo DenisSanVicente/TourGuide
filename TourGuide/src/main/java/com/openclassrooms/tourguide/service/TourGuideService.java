@@ -8,14 +8,16 @@ import com.openclassrooms.tourguide.user.UserReward;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -24,7 +26,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import gpsUtil.GpsUtil;
-import gpsUtil.location.Attraction;
 import gpsUtil.location.Location;
 import gpsUtil.location.VisitedLocation;
 
@@ -33,12 +34,13 @@ import tripPricer.TripPricer;
 
 @Service
 public class TourGuideService {
-	private Logger logger = LoggerFactory.getLogger(TourGuideService.class);
+	private static final Logger logger = LoggerFactory.getLogger(TourGuideService.class);
 	private final GpsUtil gpsUtil;
 	private final RewardsService rewardsService;
 	private final TripPricer tripPricer = new TripPricer();
 	public final Tracker tracker;
 	boolean testMode = true;
+    private final ExecutorService executorService = Executors.newFixedThreadPool(150);
 
 	public TourGuideService(GpsUtil gpsUtil, RewardsService rewardsService) {
 		this.gpsUtil = gpsUtil;
@@ -57,7 +59,8 @@ public class TourGuideService {
 	}
 
 	public List<UserReward> getUserRewards(User user) {
-		return user.getUserRewards();
+
+        return user.getUserRewards();
 	}
 
 	public VisitedLocation getUserLocation(User user) {
@@ -96,6 +99,13 @@ public class TourGuideService {
 		return visitedLocation;
 	}
 
+    public CompletableFuture<VisitedLocation> trackUserLocationAsync(User user) {
+        return CompletableFuture.supplyAsync(
+                () -> trackUserLocation(user),
+                executorService
+        );
+    }
+
 
     public List<NearByAttractionDto> getNearByAttractions(
             User user, VisitedLocation visitedLocation) {
@@ -129,10 +139,36 @@ public class TourGuideService {
                 .toList();
     }
 
+    public void trackAllUsersAsync(List<User> users) {
+
+        List<CompletableFuture<VisitedLocation>> futures = users.stream()
+                .map(this::trackUserLocationAsync)
+                .toList();
+
+        CompletableFuture.allOf(
+                futures.toArray(new CompletableFuture[0])
+        ).join();
+    }
+
+    public void calculateRewardsForAllUsersAsync(List<User> users) {
+
+        List<CompletableFuture<Void>> futures = users.stream()
+                .map(user -> CompletableFuture.runAsync(
+                        () -> rewardsService.calculateRewards(user),
+                        executorService
+                ))
+                .toList();
+
+        CompletableFuture.allOf(
+                futures.toArray(new CompletableFuture[0])
+        ).join();
+    }
+
 	private void addShutDownHook() {
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			public void run() {
 				tracker.stopTracking();
+                executorService.shutdownNow();
 			}
 		});
 	}
@@ -145,7 +181,7 @@ public class TourGuideService {
 	private static final String tripPricerApiKey = "test-server-api-key";
 	// Database connection will be used for external users, but for testing purposes
 	// internal users are provided and stored in memory
-	private final Map<String, User> internalUserMap = new HashMap<>();
+	private final Map<String, User> internalUserMap = new ConcurrentHashMap<>();
 
 	private void initializeInternalUsers() {
 		IntStream.range(0, InternalTestHelper.getInternalUserNumber()).forEach(i -> {
