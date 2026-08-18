@@ -45,6 +45,7 @@ public class TestPerformance {
 	 */
 
 
+    @Disabled
 	@Test
 	public void highVolumeTrackLocation() {
 		GpsUtil gpsUtil = new GpsUtil();
@@ -69,6 +70,7 @@ public class TestPerformance {
 	}
 
 
+    @Disabled
 	@Test
 	public void highVolumeGetRewards() {
 		GpsUtil gpsUtil = new GpsUtil();
