@@ -1,0 +1,22 @@
+# Maven
+TourGuide/target/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+
+# IDE-specific
+/shelf/
+/workspace.xml
